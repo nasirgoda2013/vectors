@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LLM Meaning Land with Vectors</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: rgba(15, 23, 42, 0.94);
+    --text: #f8fafc;
+    --muted: #cbd5e1;
+    --yellow: #fde68a;
+    --blue: #93c5fd;
+    --green: #86efac;
+    --red: #fca5a5;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    background: radial-gradient(circle at top, #1e293b, #020617);
+    color: var(--text);
+  }
+
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    cursor: grab;
+  }
+
+  canvas:active { cursor: grabbing; }
+
+  .panel {
+    position: absolute;
+    background: var(--panel);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 18px;
+    box-shadow: 0 12px 35px rgba(0,0,0,0.35);
+    z-index: 20;
+  }
+
+  #topLeft {
+    top: 16px;
+    left: 16px;
+    width: 355px;
+    padding: 16px;
+  }
+
+  #topLeft h1 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    color: var(--yellow);
+  }
+
+  #topLeft p {
+    margin: 7px 0;
+    font-size: 14px;
+    line-height: 1.45;
+    color: #e5e7eb;
+  }
+
+  .legend div { margin: 5px 0; font-size: 13px; }
+  .dot {
+    display: inline-block;
+    width: 12px; height: 12px; border-radius: 50%;
+    margin-right: 8px; vertical-align: middle;
+  }
+
+  #controls {
+    left: 16px;
+    bottom: 16px;
+    width: 355px;
+    padding: 14px;
+  }
+
+  #controls h2, #infoBox h2, #compareBox h2, #vectorTable h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: var(--blue);
+  }
+
+  #controls .small, #vectorTable .small {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+    margin-top: 8px;
+  }
+
+  button, select {
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 10px;
+    margin: 4px 3px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  button:hover, select:hover { background: #1d4ed8; }
+  button.active { background: #facc15; color: #1e293b; font-weight: bold; }
+
+  #infoBox {
+    top: 16px;
+    right: 16px;
+    width: 370px;
+    padding: 16px;
+    max-height: calc(100vh - 32px);
+    overflow: auto;
+  }
+
+  #infoBox p, #compareBox p, #vectorTable p {
+    margin: 6px 0;
+    font-size: 14px;
+    line-height: 1.42;
+    color: #e5e7eb;
+  }
+
+  #compareBox {
+    right: 16px;
+    bottom: 16px;
+    width: 370px;
+    padding: 14px;
+  }
+
+  #vectorTable {
+    left: 390px;
+    bottom: 16px;
+    width: 520px;
+    max-width: calc(100vw - 800px);
+    min-width: 400px;
+    padding: 14px;
+    max-height: 300px;
+    overflow: auto;
+  }
+
+  .vector {
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 8px 10px;
+    font-family: "Courier New", monospace;
+    font-size: 13px !important;
+    word-break: break-word;
+    line-height: 1.5 !important;
+  }
+
+  .highlight {
+    color: var(--yellow) !important;
+    font-weight: bold;
+  }
+
+  .good {
+    color: var(--green) !important;
+    font-weight: bold;
+  }
+
+  .bad {
+    color: var(--red) !important;
+    font-weight: bold;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 13px;
+  }
+
+  th, td {
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    padding: 8px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th { color: #bfdbfe; position: sticky; top: 0; background: rgba(15,23,42,0.98); }
+  .groupChip {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: #fff;
+  }
+
+  .simBarWrap {
+    width: 100%;
+    height: 14px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  .simBar {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #22c55e, #fde047);
+  }
+
+  @media (max-width: 1450px) {
+    #vectorTable {
+      display: none;
+    }
+  }
+
+  @media (max-width: 900px) {
+    #topLeft { display: none; }
+    #controls, #infoBox, #compareBox {
+      width: calc(100vw - 42px);
+      left: 16px;
+      right: auto;
+    }
+    #compareBox { bottom: 16px; }
+    #infoBox { top: 16px; max-height: 40vh; }
+    #controls { bottom: 220px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="topLeft" class="panel">
+  <h1>3D Meaning Land</h1>
+  <p>
+    In an LLM, each word is represented by a list of numbers called a <strong>vector</strong> or <strong>embedding</strong>.
+  </p>
+  <p>
+    <strong>Important idea:</strong> similar words usually have <strong>similar vectors</strong>, so they appear close together in meaning space.
+  </p>
+  <p>
+    This page uses a <strong>simple classroom example</strong>. Real LLM vectors are much longer and more complex.
+  </p>
+  <div class="legend">
+    <div><span class="dot" style="background:#22c55e"></span> Technology words</div>
+    <div><span class="dot" style="background:#f97316"></span> Food words</div>
+    <div><span class="dot" style="background:#a855f7"></span> Animal words</div>
+    <div><span class="dot" style="background:#eab308"></span> Emotion words</div>
+  </div>
+</div>
+
+<div id="controls" class="panel">
+  <h2>Classroom Actions</h2>
+  <button id="btnAll" onclick="setFocus('all')">Show All</button>
+  <button id="btnTech" onclick="setFocus('tech')">Technology</button>
+  <button id="btnFood" onclick="setFocus('food')">Food</button>
+  <button id="btnAnimal" onclick="setFocus('animal')">Animal</button>
+  <button id="btnEmotion" onclick="setFocus('emotion')">Emotion</button>
+  <button onclick="toggleMotion()">Pause / Play</button>
+  <button onclick="resetView()">Reset View</button>
+  <div class="small">
+    Drag to rotate. Use mouse wheel to zoom. Click a word ball.<br>
+    Then compare two words below.
+  </div>
+</div>
+
+<div id="infoBox" class="panel">
+  <h2>Click a word ball</h2>
+  <p>When you click a word, you will see:</p>
+  <p>• the meaning</p>
+  <p>• the simple vector numbers</p>
+  <p>• the nearest words</p>
+  <p class="highlight">Close meaning → close numbers</p>
+</div>
+
+<div id="compareBox" class="panel">
+  <h2>Compare Two Words</h2>
+  <p>Select two words to compare their vectors.</p>
+  <div>
+    <select id="wordA"></select>
+    <select id="wordB"></select>
+    <button onclick="compareSelectedWords()">Compare</button>
+  </div>
+  <div id="compareResult">
+    <p class="highlight">Example: computer and laptop should be more similar than computer and pizza.</p>
+  </div>
+</div>
+
+<div id="vectorTable" class="panel">
+  <h2>Word Vectors Table</h2>
+  <p class="small">
+    These are simple example vectors for teaching. Similar words have numbers that are close to each other.
+  </p>
+  <div id="tableWrap"></div>
+</div>
+
+<script>
+const canvas = document.getElementById("scene");
+const ctx = canvas.getContext("2d");
+
+let W = window.innerWidth;
+let H = window.innerHeight;
+let dpr = window.devicePixelRatio || 1;
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resize();
+window.addEventListener("resize", resize);
+
+const words = [
+  // Technology
+  { word:"computer", group:"tech", color:"#22c55e", x:-4.2, y:1.0, z:-2.8, meaning:"A machine that processes information.", vec:[0.92, 0.81, 0.88, 0.15, -0.20, 0.74] },
+  { word:"laptop", group:"tech", color:"#22c55e", x:-3.7, y:1.2, z:-2.4, meaning:"A portable computer.", vec:[0.90, 0.79, 0.86, 0.18, -0.18, 0.70] },
+  { word:"keyboard", group:"tech", color:"#22c55e", x:-4.8, y:0.8, z:-2.1, meaning:"A tool used to type into a computer.", vec:[0.85, 0.72, 0.80, 0.10, -0.25, 0.66] },
+  { word:"code", group:"tech", color:"#22c55e", x:-3.8, y:1.6, z:-3.4, meaning:"Instructions written for a computer.", vec:[0.88, 0.76, 0.91, 0.26, -0.10, 0.82] },
+  { word:"programming", group:"tech", color:"#22c55e", x:-3.2, y:1.4, z:-3.1, meaning:"Writing code to create software.", vec:[0.91, 0.78, 0.94, 0.22, -0.08, 0.86] },
+
+  // Food
+  { word:"pizza", group:"food", color:"#f97316", x:3.5, y:1.0, z:-2.8, meaning:"Food with bread, sauce, and cheese.", vec:[-0.86, 0.92, -0.18, 0.83, 0.78, -0.22] },
+  { word:"burger", group:"food", color:"#f97316", x:4.1, y:1.2, z:-2.3, meaning:"Food with bread and filling.", vec:[-0.82, 0.88, -0.15, 0.80, 0.74, -0.18] },
+  { word:"sandwich", group:"food", color:"#f97316", x:3.2, y:0.9, z:-2.0, meaning:"Food made with bread and filling.", vec:[-0.79, 0.85, -0.12, 0.76, 0.70, -0.14] },
+  { word:"cheese", group:"food", color:"#f97316", x:4.6, y:0.8, z:-3.0, meaning:"A dairy food often used in pizza.", vec:[-0.75, 0.90, -0.05, 0.88, 0.82, -0.10] },
+
+  // Animals
+  { word:"cat", group:"animal", color:"#a855f7", x:-3.8, y:1.0, z:3.2, meaning:"A small pet animal.", vec:[0.16, -0.84, 0.80, -0.72, 0.26, 0.58] },
+  { word:"dog", group:"animal", color:"#a855f7", x:-4.4, y:1.2, z:3.7, meaning:"A common pet animal.", vec:[0.18, -0.80, 0.76, -0.70, 0.22, 0.60] },
+  { word:"lion", group:"animal", color:"#a855f7", x:-3.1, y:1.5, z:4.0, meaning:"A large wild cat.", vec:[0.24, -0.78, 0.89, -0.60, 0.30, 0.68] },
+  { word:"tiger", group:"animal", color:"#a855f7", x:-2.6, y:1.3, z:3.6, meaning:"A large striped wild cat.", vec:[0.27, -0.75, 0.91, -0.58, 0.32, 0.70] },
+
+  // Emotion
+  { word:"happy", group:"emotion", color:"#eab308", x:3.2, y:1.3, z:3.1, meaning:"Feeling good or pleased.", vec:[0.74, 0.20, -0.82, 0.86, -0.76, 0.35] },
+  { word:"joyful", group:"emotion", color:"#eab308", x:3.7, y:1.5, z:3.4, meaning:"Very happy.", vec:[0.78, 0.24, -0.85, 0.90, -0.80, 0.38] },
+  { word:"sad", group:"emotion", color:"#eab308", x:4.4, y:0.9, z:4.2, meaning:"Feeling unhappy.", vec:[0.56, 0.12, -0.68, 0.20, -0.90, 0.25] },
+  { word:"angry", group:"emotion", color:"#eab308", x:4.9, y:1.2, z:3.6, meaning:"Feeling strong displeasure.", vec:[0.49, 0.08, -0.62, 0.10, -0.88, 0.22] }
+];
+
+const groupNames = {
+  tech: "Technology",
+  food: "Food",
+  animal: "Animal",
+  emotion: "Emotion"
+};
+
+let angleX = -0.35;
+let angleY = 0.75;
+let zoom = 60;
+let focus = "all";
+let selected = null;
+let play = true;
+
+let targetAngleX = angleX;
+let targetAngleY = angleY;
+let targetZoom = zoom;
+let targetCenter = {x:0, y:0, z:0};
+let center = {x:0, y:0, z:0};
+
+function vecToString(vec) {
+  return "[" + vec.map(v => (v >= 0 ? " " : "") + v.toFixed(2)).join(", ") + "]";
+}
+
+function euclidean(a, b) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += (a[i]-b[i])**2;
+  return Math.sqrt(sum);
+}
+
+function similarityPercent(a, b) {
+  const d = euclidean(a, b);
+  const maxD = 4.5; // teaching scale
+  const score = Math.max(0, 1 - d / maxD);
+  return Math.round(score * 100);
+}
+
+function nearestWords(wordObj, count=3) {
+  return words
+    .filter(w => w.word !== wordObj.word)
+    .map(w => ({...w, dist: euclidean(wordObj.vec, w.vec)}))
+    .sort((a,b) => a.dist - b.dist)
+    .slice(0, count);
+}
+
+function rotatePoint(p) {
+  let x = p.x - center.x;
+  let y = p.y - center.y;
+  let z = p.z - center.z;
+
+  const cosY = Math.cos(angleY), sinY = Math.sin(angleY);
+  let x1 = x * cosY - z * sinY;
+  let z1 = x * sinY + z * cosY;
+
+  const cosX = Math.cos(angleX), sinX = Math.sin(angleX);
+  let y2 = y * cosX - z1 * sinX;
+  let z2 = y * sinX + z1 * cosX;
+
+  return {x:x1, y:y2, z:z2};
+}
+
+function project(p) {
+  const r = rotatePoint(p);
+  const perspective = 500 / (500 + r.z * zoom * 0.5);
+  return {
+    x: W / 2 + r.x * zoom * perspective,
+    y: H / 2 - r.y * zoom * perspective,
+    z: r.z,
+    scale: perspective
+  };
+}
+
+function distance3D(a, b) {
+  return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2 + (a.z-b.z)**2);
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+}
+
+function drawGrid() {
+  const gridColor = "rgba(148, 163, 184, 0.22)";
+  ctx.lineWidth = 1;
+  for (let i = -6; i <= 6; i++) {
+    const a = project({x:i, y:0, z:-6});
+    const b = project({x:i, y:0, z:6});
+    const c = project({x:-6, y:0, z:i});
+    const d = project({x:6, y:0, z:i});
+
+    ctx.strokeStyle = gridColor;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.stroke();
+  }
+}
+
+function drawAxis() {
+  const axes = [
+    {a:{x:-6,y:0,z:0}, b:{x:6,y:0,z:0}, color:"rgba(248,113,113,0.75)", label:"Meaning Feature X"},
+    {a:{x:0,y:0,z:-6}, b:{x:0,y:0,z:6}, color:"rgba(96,165,250,0.75)", label:"Meaning Feature Z"},
+    {a:{x:0,y:0,z:0}, b:{x:0,y:6,z:0}, color:"rgba(74,222,128,0.75)", label:"Meaning Feature Y"}
+  ];
+
+  axes.forEach(axis => {
+    const a = project(axis.a);
+    const b = project(axis.b);
+    ctx.strokeStyle = axis.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "13px Arial";
+    ctx.fillText(axis.label, b.x + 8, b.y);
+  });
+}
+
+function visibleWord(w) {
+  return focus === "all" || w.group === focus;
+}
+
+function drawLinks() {
+  for (let i = 0; i < words.length; i++) {
+    for (let j = i + 1; j < words.length; j++) {
+      const a = words[i];
+      const b = words[j];
+      if (a.group === b.group && distance3D(a,b) < 1.45) {
+        const pa = project(a);
+        const pb = project(b);
+        ctx.globalAlpha = visibleWord(a) && visibleWord(b) ? 0.45 : 0.10;
+        ctx.strokeStyle = a.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawWord(w) {
+  const p = project(w);
+  const isVisible = visibleWord(w);
+  const isSelected = selected && selected.word === w.word;
+
+  ctx.globalAlpha = isVisible ? 1 : 0.14;
+  const radius = (isSelected ? 15 : 11) * p.scale;
+
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius + 4, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = w.color;
+  ctx.fill();
+
+  ctx.strokeStyle = isSelected ? "#fde68a" : "rgba(255,255,255,0.85)";
+  ctx.lineWidth = isSelected ? 3 : 1.5;
+  ctx.stroke();
+
+  ctx.font = `${Math.max(13, 16 * p.scale)}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const labelW = ctx.measureText(w.word).width + 16;
+  ctx.fillStyle = "rgba(15,23,42,0.82)";
+  roundRect(ctx, p.x - labelW/2, p.y - radius - 32, labelW, 24, 8);
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(w.word, p.x, p.y - radius - 20);
+
+  w.screenX = p.x;
+  w.screenY = p.y;
+  w.screenR = radius + 10;
+  ctx.globalAlpha = 1;
+}
+
+function drawTeacherNote() {
+  ctx.save();
+  ctx.fillStyle = "rgba(15,23,42,0.78)";
+  roundRect(ctx, W/2 - 250, H - 90, 500, 55, 14);
+  ctx.fill();
+  ctx.fillStyle = "#fde68a";
+  ctx.font = "bold 16px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("LLM idea: similar words have similar vectors", W/2, H - 61);
+  ctx.fillStyle = "#cbd5e1";
+  ctx.font = "13px Arial";
+  ctx.fillText("Example: computer ≈ laptop, but computer is not close to pizza", W/2, H - 39);
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  angleX += (targetAngleX - angleX) * 0.08;
+  angleY += (targetAngleY - angleY) * 0.08;
+  zoom += (targetZoom - zoom) * 0.08;
+  center.x += (targetCenter.x - center.x) * 0.08;
+  center.y += (targetCenter.y - center.y) * 0.08;
+  center.z += (targetCenter.z - center.z) * 0.08;
+
+  if (play && focus === "all") targetAngleY += 0.002;
+
+  drawGrid();
+  drawAxis();
+  drawLinks();
+
+  const sorted = [...words].sort((a,b) => rotatePoint(a).z - rotatePoint(b).z);
+  sorted.forEach(drawWord);
+  drawTeacherNote();
+
+  requestAnimationFrame(draw);
+}
+draw();
+
+function showInfo(w) {
+  selected = w;
+  document.getElementById("wordA").value = w.word;
+
+  const near = nearestWords(w, 3);
+  const nearHtml = near.map(n => `
+    <p><strong>${n.word}</strong> → similarity ${similarityPercent(w.vec, n.vec)}%<br>
+    <span class="vector">${vecToString(n.vec)}</span></p>
+  `).join("");
+
+  document.getElementById("infoBox").innerHTML = `
+    <h2>${w.word}</h2>
+    <p><strong>Category:</strong> ${groupNames[w.group]}</p>
+    <p><strong>Meaning:</strong> ${w.meaning}</p>
+    <p><strong>3D position:</strong> (${w.x.toFixed(1)}, ${w.y.toFixed(1)}, ${w.z.toFixed(1)})</p>
+    <p><strong>Example embedding vector:</strong></p>
+    <p class="vector">${vecToString(w.vec)}</p>
+    <p class="highlight">This list of numbers is the word's simplified “meaning code”.</p>
+    <p><strong>Nearest words by vector similarity:</strong></p>
+    ${nearHtml}
+  `;
+}
+
+function populateSelectors() {
+  const selA = document.getElementById("wordA");
+  const selB = document.getElementById("wordB");
+  const opts = words.map(w => `<option value="${w.word}">${w.word}</option>`).join("");
+  selA.innerHTML = opts;
+  selB.innerHTML = opts;
+  selA.value = "computer";
+  selB.value = "laptop";
+}
+populateSelectors();
+
+function compareSelectedWords() {
+  const aName = document.getElementById("wordA").value;
+  const bName = document.getElementById("wordB").value;
+  const a = words.find(w => w.word === aName);
+  const b = words.find(w => w.word === bName);
+  const sim = similarityPercent(a.vec, b.vec);
+  const d = euclidean(a.vec, b.vec).toFixed(2);
+  const sameGroup = a.group === b.group;
+
+  let msg = "";
+  if (sim >= 85) msg = "These words are very close in meaning.";
+  else if (sim >= 65) msg = "These words are somewhat close in meaning.";
+  else msg = "These words are not very close in meaning.";
+
+  document.getElementById("compareResult").innerHTML = `
+    <p><strong>${a.word}</strong> vector:</p>
+    <p class="vector">${vecToString(a.vec)}</p>
+    <p><strong>${b.word}</strong> vector:</p>
+    <p class="vector">${vecToString(b.vec)}</p>
+    <p class="${sim >= 65 ? 'good' : 'bad'}"><strong>Similarity:</strong> ${sim}%</p>
+    <div class="simBarWrap"><div class="simBar" style="width:${sim}%"></div></div>
+    <p><strong>Vector distance:</strong> ${d}</p>
+    <p class="highlight">${msg}</p>
+    <p>${sameGroup ? "Both words are from the same meaning group." : "These words come from different meaning groups."}</p>
+  `;
+}
+
+function buildVectorTable() {
+  const rows = words.map(w => `
+    <tr>
+      <td><strong>${w.word}</strong></td>
+      <td><span class="groupChip" style="background:${w.color}">${groupNames[w.group]}</span></td>
+      <td><span class="vector">${vecToString(w.vec)}</span></td>
+    </tr>
+  `).join("");
+
+  document.getElementById("tableWrap").innerHTML = `
+    <table>
+      <thead>
+        <tr><th>Word</th><th>Group</th><th>Example Vector</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+buildVectorTable();
+
+function setFocus(group) {
+  focus = group;
+  selected = null;
+  document.querySelectorAll("button[id^='btn']").forEach(btn => btn.classList.remove("active"));
+
+  const map = { all:"btnAll", tech:"btnTech", food:"btnFood", animal:"btnAnimal", emotion:"btnEmotion" };
+  if (map[group]) document.getElementById(map[group]).classList.add("active");
+
+  if (group === "all") {
+    targetCenter = {x:0,y:0,z:0};
+    targetZoom = 60;
+    document.getElementById("infoBox").innerHTML = `
+      <h2>All Meaning Land</h2>
+      <p>Now you can compare all word groups.</p>
+      <p class="highlight">Words from the same meaning area usually have similar vectors.</p>
+    `;
+    return;
+  }
+
+  const groupWords = words.filter(w => w.group === group);
+  const avg = groupWords.reduce((acc,w) => {
+    acc.x += w.x; acc.y += w.y; acc.z += w.z; return acc;
+  }, {x:0,y:0,z:0});
+
+  avg.x /= groupWords.length;
+  avg.y /= groupWords.length;
+  avg.z /= groupWords.length;
+
+  targetCenter = avg;
+  targetZoom = 95;
+
+  document.getElementById("infoBox").innerHTML = `
+    <h2>${groupNames[group]} Cluster</h2>
+    <p>These words are close because they have related meanings.</p>
+    <p class="highlight">Their vectors are also similar.</p>
+    <p>Ask students to click the words and compare the number lists.</p>
+  `;
+}
+
+function resetView() {
+  focus = "all";
+  selected = null;
+  targetCenter = {x:0,y:0,z:0};
+  targetZoom = 60;
+  targetAngleX = -0.35;
+  targetAngleY = 0.75;
+  document.querySelectorAll("button[id^='btn']").forEach(btn => btn.classList.remove("active"));
+  document.getElementById("btnAll").classList.add("active");
+  document.getElementById("infoBox").innerHTML = `
+    <h2>Click a word ball</h2>
+    <p>When you click a word, you will see:</p>
+    <p>• the meaning</p>
+    <p>• the simple vector numbers</p>
+    <p>• the nearest words</p>
+    <p class="highlight">Close meaning → close numbers</p>
+  `;
+}
+function toggleMotion() { play = !play; }
+
+let dragging = false;
+let moved = false;
+let lastX = 0;
+let lastY = 0;
+
+canvas.addEventListener("mousedown", e => {
+  dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+});
+window.addEventListener("mousemove", e => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+  targetAngleY += dx * 0.008;
+  targetAngleX += dy * 0.008;
+  targetAngleX = Math.max(-1.25, Math.min(1.25, targetAngleX));
+  lastX = e.clientX; lastY = e.clientY;
+});
+window.addEventListener("mouseup", e => {
+  if (!dragging) return;
+  dragging = false;
+  if (!moved) handleClick(e.clientX, e.clientY);
+});
+
+canvas.addEventListener("touchstart", e => {
+  if (e.touches.length === 1) {
+    dragging = true; moved = false;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  }
+});
+canvas.addEventListener("touchmove", e => {
+  if (!dragging || e.touches.length !== 1) return;
+  const dx = e.touches[0].clientX - lastX;
+  const dy = e.touches[0].clientY - lastY;
+  if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+  targetAngleY += dx * 0.008;
+  targetAngleX += dy * 0.008;
+  targetAngleX = Math.max(-1.25, Math.min(1.25, targetAngleX));
+  lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+});
+canvas.addEventListener("touchend", e => { dragging = false; });
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  targetZoom *= e.deltaY > 0 ? 0.9 : 1.1;
+  targetZoom = Math.max(35, Math.min(130, targetZoom));
+}, {passive:false});
+
+function handleClick(x, y) {
+  let closest = null;
+  let closestD = Infinity;
+  words.forEach(w => {
+    if (!visibleWord(w)) return;
+    const dx = x - w.screenX;
+    const dy = y - w.screenY;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < w.screenR && d < closestD) { closest = w; closestD = d; }
+  });
+  if (closest) showInfo(closest);
+}
+
+document.getElementById("btnAll").classList.add("active");
+compareSelectedWords();
+</script>
+</body>
+</html>
